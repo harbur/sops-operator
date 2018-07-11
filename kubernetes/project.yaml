@@ -1,0 +1,7 @@
+apiVersion: "tutorial.harbur.io/v1alpha1"
+kind: "Project"
+metadata:
+  name: "example-project"
+  namespace: "default"
+spec:
+  replicas: 1

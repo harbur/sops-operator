@@ -1,0 +1,22 @@
+apiVersion: "apiextensions.k8s.io/v1beta1"
+kind: "CustomResourceDefinition"
+metadata:
+  name: "projects.tutorial.harbur.io"
+spec:
+  group: "tutorial.harbur.io"
+  version: "v1alpha1"
+  scope: "Namespaced"
+  names:
+    plural: "projects"
+    singular: "project"
+    kind: "Project"
+  validation:
+    openAPIV3Schema:
+      required: ["spec"]
+      properties:
+        spec:
+          required: ["replicas"]
+          properties:
+            replicas:
+              type: "integer"
+              minimum: 1
