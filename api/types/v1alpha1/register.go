@@ -6,7 +6,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-const GroupName = "tutorial.harbur.io"
+const GroupName = "harbur.io"
 const GroupVersion = "v1alpha1"
 
 var SchemeGroupVersion = schema.GroupVersion{Group: GroupName, Version: GroupVersion}
@@ -18,8 +18,8 @@ var (
 
 func addKnownTypes(scheme *runtime.Scheme) error {
 	scheme.AddKnownTypes(SchemeGroupVersion,
-		&Project{},
-		&ProjectList{},
+		&SealedSecret{},
+		&SealedSecretList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)

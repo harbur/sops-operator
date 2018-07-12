@@ -1,3 +1,3 @@
 FROM scratch
-ADD project-initializer /project-initializer
-ENTRYPOINT ["/project-initializer"]
+ADD sops-operator /sops-operator
+ENTRYPOINT ["/sops-operator"]

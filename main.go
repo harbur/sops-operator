@@ -5,12 +5,12 @@ import (
 	"log"
 	"time"
 
-	"github.com/harbur/project-initializer/api/types/v1alpha1"
-	clientV1alpha1 "github.com/harbur/project-initializer/clientset/v1alpha1"
+	"github.com/harbur/sops-operator/api/types/v1alpha1"
+	clientV1alpha1 "github.com/harbur/sops-operator/clientset/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -21,8 +21,8 @@ import (
 )
 
 const (
-	defaultAnnotation      = "initializer.kubernetes.io/projects"
-	defaultInitializerName = "project.initializer.kubernetes.io"
+	defaultAnnotation      = "initializer.kubernetes.io/sealedsecrets"
+	defaultInitializerName = "sealedsecret.initializer.kubernetes.io"
 	defaultConfigmap       = "envoy-initializer"
 	defaultNamespace       = "default"
 )
@@ -81,7 +81,7 @@ func main() {
 	flag.BoolVar(&requireAnnotation, "require-annotation", false, "Require annotation for initialization")
 	flag.Parse()
 
-	log.Println("Starting the Kubernetes project initializer...")
+	log.Println("Starting the Kubernetes sops operator...")
 	log.Printf("Initializer name set to: %s", initializerName)
 
 	clientset, err := kubernetes.NewForConfig(config)
@@ -89,23 +89,23 @@ func main() {
 		log.Fatal(err)
 	}
 
-	_, projectController := cache.NewInformer(
+	_, sealedSecretController := cache.NewInformer(
 		&cache.ListWatch{
 			ListFunc: func(lo metav1.ListOptions) (result runtime.Object, err error) {
 				lo.IncludeUninitialized = true
-				return clientSet.Projects("").List(lo)
+				return clientSet.SealedSecrets("").List(lo)
 			},
 			WatchFunc: func(lo metav1.ListOptions) (watch.Interface, error) {
 				lo.IncludeUninitialized = true
-				return clientSet.Projects("").Watch(lo)
+				return clientSet.SealedSecrets("").Watch(lo)
 			},
 		},
-		&v1alpha1.Project{},
+		&v1alpha1.SealedSecret{},
 		1*time.Minute,
 		cache.ResourceEventHandlerFuncs{},
 	)
 
-	go projectController.Run(wait.NeverStop)
+	go sealedSecretController.Run(wait.NeverStop)
 
 	if clientset != nil {
 	}
@@ -116,14 +116,14 @@ func main() {
 	//////////////////
 
 	for {
-		projectsFromStore := store.List()
-		for _, project := range projectsFromStore {
-			var project = project.(*v1alpha1.Project)
+		sealedSecretsFromStore := store.List()
+		for _, sealedSecret := range sealedSecretsFromStore {
+			var sealedSecret = sealedSecret.(*v1alpha1.SealedSecret)
 
-			initializeProject(project, clientset, clientSet)
-			if project.Initializers != nil {
+			initializeSealedSecret(sealedSecret, clientset, clientSet)
+			if sealedSecret.Initializers != nil {
 
-				if len(project.Initializers.Pending) > 0 {
+				if len(sealedSecret.Initializers.Pending) > 0 {
 				}
 			}
 		}
@@ -133,29 +133,26 @@ func main() {
 
 }
 
-func initializeProject(project *v1alpha1.Project, clientset *kubernetes.Clientset, v1Alpha1Clientset *clientV1alpha1.ExampleV1Alpha1Client) error {
-	if project.ObjectMeta.GetInitializers() != nil {
-		pendingInitializers := project.ObjectMeta.GetInitializers().Pending
+func initializeSealedSecret(sealedSecret *v1alpha1.SealedSecret, clientset *kubernetes.Clientset, v1Alpha1Clientset *clientV1alpha1.ExampleV1Alpha1Client) error {
+	if sealedSecret.ObjectMeta.GetInitializers() != nil {
+		pendingInitializers := sealedSecret.ObjectMeta.GetInitializers().Pending
 
 		if initializerName == pendingInitializers[0].Name {
-			log.Printf("Initializing Project %s (%s)", project.Name, project.Namespace)
+			log.Printf("Initializing SealedSecret %s (%s)", sealedSecret.Name, sealedSecret.Namespace)
 
-			initializedProject := project
+			initializedSealedSecret := sealedSecret
 
 			// Remove self from the list of pending Initializers while preserving ordering.
 			if len(pendingInitializers) == 1 {
-				initializedProject.ObjectMeta.Initializers = nil
+				initializedSealedSecret.ObjectMeta.Initializers = nil
 			} else {
-				initializedProject.ObjectMeta.Initializers.Pending = append(pendingInitializers[:0], pendingInitializers[1:]...)
+				initializedSealedSecret.ObjectMeta.Initializers.Pending = append(pendingInitializers[:0], pendingInitializers[1:]...)
 			}
 
 			// Create Namespaces
-			createNamespace(project, "lab", clientset)
-			createNamespace(project, "staging", clientset)
-			createNamespace(project, "pre", clientset)
-			createNamespace(project, "pro", clientset)
+			createSecret(sealedSecret, clientset)
 
-			_, err := v1Alpha1Clientset.Projects(project.Namespace).Update(initializedProject)
+			_, err := v1Alpha1Clientset.SealedSecrets(sealedSecret.Namespace).Update(initializedSealedSecret)
 			if err != nil {
 				log.Printf("Error %s", err)
 				return err
@@ -166,38 +163,27 @@ func initializeProject(project *v1alpha1.Project, clientset *kubernetes.Clientse
 	return nil
 }
 
-func createRoleBinding(project *v1alpha1.Project, namespace string, clientset *kubernetes.Clientset) error {
-	// Create RoleBinding
-	roleName := project.Spec.Owner + "-cluster-admin"
-	roleSpec := &rbacv1.RoleBinding{ObjectMeta: metav1.ObjectMeta{Name: roleName}}
-	roleSpec.RoleRef.APIGroup = "rbac.authorization.k8s.io"
-	roleSpec.RoleRef.Kind = "ClusterRole"
-	roleSpec.RoleRef.Name = "silk:users:cluster-admin"
-	roleSpec.Subjects = make([]rbacv1.Subject, 1)
-	roleSpec.Subjects[0].APIGroup = "rbac.authorization.k8s.io"
-	roleSpec.Subjects[0].Kind = "User"
-	roleSpec.Subjects[0].Name = project.Spec.Owner
-
-	_, err := clientset.RbacV1().RoleBindings(namespace).Create(roleSpec)
+func createSecret(sealedSecret *v1alpha1.SealedSecret, clientset *kubernetes.Clientset) error {
+	namespace = sealedSecret.Namespace
+	nsSpec := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sealedSecret.Name,
+			Namespace: sealedSecret.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(sealedSecret, schema.GroupVersionKind{
+					Group:   v1alpha1.SchemeGroupVersion.Group,
+					Version: v1alpha1.SchemeGroupVersion.Version,
+					Kind:    "SealedSecret",
+				}),
+			},
+		},
+		Data: sealedSecret.Data}
+	result, err := clientset.Core().Secrets(sealedSecret.Namespace).Create(nsSpec)
 	if err != nil {
-		log.Printf("- Error creating %s", err)
+		log.Printf("- Error unsealing %s", err)
 		return err
 	} else {
-		log.Printf("- Created RoleBinding %s (%s)", roleSpec.Name, namespace)
+		log.Printf("- Unsealed %s", result.Name)
 	}
-	return err
-}
-
-func createNamespace(project *v1alpha1.Project, namespaceSuffix string, clientset *kubernetes.Clientset) error {
-	namespace = project.Namespace + "-" + project.Name + "-" + namespaceSuffix
-	nsSpec := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
-	result, err := clientset.Core().Namespaces().Create(nsSpec)
-	if err != nil {
-		log.Printf("- Error creating %s", err)
-		return err
-	} else {
-		log.Printf("- Created Namespace %s", result.Name)
-	}
-	createRoleBinding(project, namespace, clientset)
 	return err
 }

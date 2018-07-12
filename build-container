@@ -1,6 +1,6 @@
 #!/bin/bash
 ./build
-docker build -t docker.k8s.harbur.io/project-initializer:0.0.1 .
-docker push docker.k8s.harbur.io/project-initializer:0.0.1
-rm project-initializer
+docker build -t spiddy/sops-operator:0.0.1 .
+docker push spiddy/sops-operator:0.0.1
+rm sops-operator
 
