@@ -1,14 +1,14 @@
 # Kubernetes Custom Resource Definition (CRD) Example
 
-This repository contains the example files for my [blog article on defining and accessing Kubernetes Custom Resources](https://www.martin-helmich.de/en/blog/kubernetes-crd-client.html) with the [Kubernetes client-go package](https://github.com/kubernetes/client-go).
+This is an example how to use CRD in order to operate secrets with Sops inside Kubernetes.
 
 ## Setup
 
 Building the example:
 
-    $ go get github.com/martin-helmich/kubernetes-crd-example
+    $ go get github.com/harbur/sops-operator
 
 Setting up a custom resource definition (CRD) with an example object:
 
-    $ kubectl apply -f https://raw.githubusercontent.com/martin-helmich/kubernetes-crd-client/master/kubernetes/crd.yaml
-    $ kubectl apply -f https://raw.githubusercontent.com/martin-helmich/kubernetes-crd-client/master/kubernetes/project.yaml
+    $ kubectl apply -f https://raw.githubusercontent.com/harbur/sops-operator/master/kubernetes/crd.yaml
+    $ kubectl apply -f https://github.com/harbur/sops-operator/blob/master/kubernetes/sealedsecret.yaml
